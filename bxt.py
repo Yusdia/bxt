@@ -1,12 +1,22 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 import time
-from bs4 import BeautifulSoup
 
-# URL dan Header
+# Setup WebDriver untuk Chrome Headless
+chrome_options = Options()
+chrome_options.add_argument("--headless")  # Menjalankan tanpa GUI
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+
+# Tentukan path ke chromedriver (pastikan chromedriver sudah diunduh dan ada di path yang sesuai)
+chrome_driver_path = "/path/to/chromedriver"
+
+driver = webdriver.Chrome(executable_path=chrome_driver_path, options=chrome_options)
+
+# URL yang ingin diakses
 URL = "https://bxtnetwork.fun?ref=438CYUDN21"
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36'
-}
 
 # Baca wallet dari file
 def load_wallets():
@@ -20,33 +30,31 @@ def load_wallets():
 
 def auto_claim(wallet):
     print(f"\n[{time.strftime('%H:%M:%S')}] ▶️ Wallet: {wallet}")
-    session = requests.Session()
     try:
-        res = session.get(URL, headers=HEADERS)
-        soup = BeautifulSoup(res.text, 'html.parser')
+        driver.get(URL)
+        time.sleep(5)  # Tunggu 5 detik untuk memuat halaman
 
         # Cari input form wallet
-        input_tag = soup.find("input", {"type": "text"})
+        input_tag = driver.find_element(By.XPATH, "//input[@type='text']")
         if not input_tag:
             print("❌ Input wallet tidak ditemukan.")
             return
 
-        input_name = input_tag.get('name', 'wallet')
-        form = input_tag.find_parent("form")
-        action = form.get('action', URL) if form else URL
-        claim_url = action if action.startswith('http') else URL + action
+        # Kirim wallet ke form
+        input_tag.send_keys(wallet)
+        input_tag.send_keys(Keys.RETURN)
 
-        payload = {input_name: wallet}
+        # Tunggu respon klaim
+        time.sleep(2)
 
-        print("🚀 Mengirim klaim...")
-        claim_res = session.post(claim_url, data=payload, headers=HEADERS)
-
-        if "success" in claim_res.text.lower() or "claimed" in claim_res.text.lower():
+        # Cek apakah klaim berhasil
+        page_source = driver.page_source
+        if "success" in page_source.lower() or "claimed" in page_source.lower():
             print("✅ Claim berhasil!")
         else:
             print("⚠️ Claim mungkin gagal. Cek manual.")
     except Exception as e:
-        print("‼️ Error:", e)
+        print(f"‼️ Error: {e}")
 
 # Jalankan semua wallet
 def run_all():
@@ -54,6 +62,7 @@ def run_all():
     if not wallets:
         print("❌ Tidak ada wallet ditemukan.")
         return
+
     for wallet in wallets:
         auto_claim(wallet)
 
@@ -63,5 +72,5 @@ run_all()
 # Loop setiap 3 jam
 while True:
     print("\n⏳ Tunggu 3 jam untuk klaim berikutnya...\n")
-    time.sleep(3 * 60 * 60)
+    time.sleep(3 * 60 * 60)  # Tunggu 3 jam
     run_all()
